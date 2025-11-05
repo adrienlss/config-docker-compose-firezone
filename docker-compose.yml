@@ -1,0 +1,73 @@
+services:
+  firezone:
+    image: firezone/firezone:latest
+    container_name: firezone
+    env_file: .env
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - firezone_data:/var/firezone
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.ip_forward: 1
+      net.ipv6.conf.all.forwarding: 1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+#    healthcheck:
+ #     test: ["CMD-SHELL", "/usr/bin/healthcheck"]
+  #    interval: 30s
+   #   timeout: 10s
+    #  retries: 3
+     # start_period: 30s
+    networks:
+      - firezone-net
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - firezone-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    env_file: .env
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+    restart: unless-stopped
+    command: >
+      caddy reverse-proxy --from http://vpn.davincicode.fr --to firezone:13000
+    depends_on:
+      - firezone
+    networks:
+      - firezone-net
+
+volumes:
+  firezone_data:
+  postgres_data:
+  caddy_data:
+
+networks:
+  firezone-net:
+
