@@ -1,0 +1,77 @@
+Description
+Le reverse proxy permets à une machine de rediriger conditionnellement les requêtes vers certains de ses ports / IP en fonction de ses paramètres. Cela permet notamment de séparer les sites web de nos services en utilisant les URL suivants : nom-du-service.davincicode.fr
+
+Pour plus d'informations, vous pouvez vous rendre sur la page officielle
+
+Mode d'emploi utilisateur
+Ajouter un nouveau service
+Chaque service nécessite sa propre redirection, sous la forme d'un fichier. il doit être crée dans le dossier /ect/nginx/sites-available :
+
+Le fichier est sous la forme suivante, tout ports supplémentaire nécessite l'ajout d'un "dictionnaire" server { ... } dans le même ficher. Ce fichier n'a pas d'extension précise :
+
+nomDuService :
+
+server {
+    ...
+}
+
+server {
+    ...
+}
+Port 80 : HTTP
+nomDuService :
+
+server {
+  listen 80;
+  server_name [URL SERVICE]; # The external URL you want to use i.e service.mydomain.com
+
+  location / {
+    proxy_pass [URL PROXY]; # Forward requests to the internal IP i.e 192.168.10.2:8080/
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+[URL SERVICE] : URL associée au service, ex : wiki.davincicode.fr
+[URL PROXY] : URL source, où passent toutes les requêtes, définie avec la configuration proxmox, ici : http://192.168.10.102:8000/
+
+Nginx écoute le port 80 et récupère l'URL du client. Si celui si demande [URL SERVICE] alors, la requête est envoyée à l'adresse renseignée dans le proxy_pass. Il est également possible de rajouter des paramètres dans la requête : Exemple
+
+Port 443 : HTTPS : SSL/TLS
+nomDuService :
+
+server {
+    listen 443 ssl;
+    server_name [URL SERVICE];
+
+    ssl_certificate [EMPLACEMENT PEM];
+    ssl_certificate_key [EMPLACEMENT KEY];
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+      proxy_pass [URL PROXY];
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+[URL SERVICE] : URL associée au service, ex : wiki.davincicode.fr
+[EMPLACEMENT PEM] : /etc/nginx/certificates/dvc_certificate.pem
+[EMPLACEMENT KEY] : /etc/nginx/certificates/dvc_certificate.key
+[URL PROXY] : URL source, où passent toutes les requêtes, définie avec la configuration proxmox, ici : http://192.168.10.102:8000/
+
+Créer un renvoi
+Une fois que votre fichier de configuration pour votre nouveau service est créé, il vous faudra ajouter un hard-link de votre nouvelle configuration dans le dossier /etc/nginx/sites-enabled :
+
+sudo ln -s /etc/nginx/sites-available/<configuration> /etc/nginx/sites-enabled
+Appliquer et tester la configuration
+Pour vérifier vos modifications, avant de les appliquer, vous devez utiliser :
+
+sudo nginx -t
+Pour appliquer la configuration des services, vous pouvez utiliser :
+
+sudo nginx -s 
